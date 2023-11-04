@@ -1,0 +1,60 @@
+[project]
+name = "jax-ext"
+authors = [
+    {name = "Adrian Price-Whelan", email = "adrianmpw@gmail.com"},
+]
+description = "Miscellaneous extensions for JAX that might be too niche to upstream"
+readme = "README.md"
+requires-python = ">=3.9"
+keywords = ["jax"]
+license = {file = "LICENSE"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python"
+]
+dependencies = [
+    "jax",
+    "jaxlib"
+]
+dynamic = ["version"]
+
+[project.urls]
+Documentation = "https://github.com/adrn/jax-ext"  # TODO: update this to RTD link
+Repository = "https://github.com/adrn/jax-ext.git"
+
+[project.optional-dependencies]
+test = ["pytest"]
+docs = ["sphinx", "myst-nb"]
+dev = ["pre-commit", "black", "ruff"]
+
+[build-system]
+requires = ["setuptools>=64", "setuptools_scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+version_file = "jax_ext/_version.py"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["jax_ext", "jax_ext.*"]
+
+[tool.setuptools.package-data]
+
+[tool.black]
+line-length = 88
+target-version = ["py310"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+select = ["F", "E", "I", "YTT", "W", "PTH", "UP"]
+force-exclude = true
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401", "F403"]
+"test*.py" = ["F841"]
+"docs/tutorials/*" = ["E703"]
+
+[tool.ruff.isort]
+known-first-party = ["jax_ext"]
+combine-as-imports = true
