@@ -51,6 +51,8 @@ def simpson(y: JT.ArrayLike, x: JT.ArrayLike) -> float:
     a 3-point parabolic segment for the last interval using equations outlined by
     Cartwright. See the docstring for `scipy.integrate.simpson` for more information.
 
+    Note: `x` values must be increasing and `x` and `ln_y` must have the same length.
+
     Parameters
     ----------
     y : array_like
@@ -66,8 +68,6 @@ def simpson(y: JT.ArrayLike, x: JT.ArrayLike) -> float:
     y = jnp.array(y)
     x = jnp.array(x)
     N = len(y)
-
-    # TODO: make sure x and y have the same size
 
     if N % 2 == 0:  # Even number of points, odd intervals
         result = 0.0
@@ -168,7 +168,7 @@ def ln_simpson(ln_y, x) -> float:
     a 3-point parabolic segment for the last interval using equations outlined by
     Cartwright. See the docstring for `scipy.integrate.simpson` for more information.
 
-    Note: x values must be increasing.
+    Note: `x` values must be increasing and `x` and `ln_y` must have the same length.
 
     Parameters
     ----------
@@ -227,7 +227,6 @@ def ln_simpson(ln_y, x) -> float:
             den = 6 * h0 * (h0 + h1)
             eta = jnp.where(den != 0, num / den, 0.0)
 
-            # term = logsumexp(jnp.array([ln_y[-1], ln_y[-2], ln_y[-3]]), b=jnp.array([alpha, beta, -eta]), axis=0)
             term = logsumexp(ln_y[-3:], b=jnp.array([-eta, beta, alpha]), axis=0)
             result = jnp.logaddexp(result, term)
 
