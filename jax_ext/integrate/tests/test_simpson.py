@@ -1,3 +1,5 @@
+import sys
+
 import jax
 import jax.numpy as jnp
 import pytest
@@ -16,8 +18,7 @@ def test_simpson(N):
     result = simpson(y, x)
     expected = scipy_simpson(y, x)
 
-    assert jnp.allclose(result, expected, atol=1e-16)
-
+    assert jnp.allclose(result, expected, atol=sys.float_info.epsilon)
 
 @pytest.mark.parametrize("N", [2, 128, 129])
 def test_ln_simpson(N):
@@ -27,4 +28,4 @@ def test_ln_simpson(N):
     result = ln_simpson(jnp.log(y), x)
     expected = jnp.log(scipy_simpson(y, x))
 
-    assert jnp.allclose(result, expected, atol=1e-15)
+    assert jnp.allclose(result, expected, atol=sys.float_info.epsilon)
