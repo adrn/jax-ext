@@ -1,4 +1,5 @@
 from functools import partial
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -7,20 +8,29 @@ from jax.scipy.special import logsumexp
 
 __all__ = ["simpson", "ln_simpson"]
 
-@partial(jax.jit, static_argnums=1)
-def _basic_simpson(y: JT.ArrayLike, stop: int, x: JT.ArrayLike):
+
+def tupleset(t: tuple, i: int, value: Any) -> tuple:
+    _l = list(t)
+    _l[i] = value
+    return tuple(_l)
+
+
+@partial(jax.jit, static_argnums=(1, 3))
+def _basic_simpson(y: jax.Array, stop: int, x: jax.Array, axis: int) -> jax.Array:
     """
     Note: Interface comes from scipy.integrate.simpson implementation
     """
+    nd = len(y.shape)  # number of dimensions
     step = 2
 
-    slice0 = slice(0, stop, step)
-    slice1 = slice(1, stop + 1, step)
-    slice2 = slice(2, stop + 2, step)
+    slice_all = (slice(None),) * nd
+    slice0 = tupleset(slice_all, axis, slice(0, stop, step))
+    slice1 = tupleset(slice_all, axis, slice(1, stop + 1, step))
+    slice2 = tupleset(slice_all, axis, slice(2, stop + 2, step))
 
     # Account for possibly different spacings.
     #    Simpson's rule changes a bit.
-    h = jnp.diff(x)
+    h = jnp.diff(x, axis=axis)
     h0 = h[slice0]
     h1 = h[slice1]
     hsum = h0 + h1
@@ -35,13 +45,11 @@ def _basic_simpson(y: JT.ArrayLike, stop: int, x: JT.ArrayLike):
             + y[slice2] * (2.0 - h0divh1)
         )
     )
-    result = jnp.sum(tmp)
-
-    return result
+    return jnp.sum(tmp, axis=axis)
 
 
-@jax.jit
-def simpson(y: JT.ArrayLike, x: JT.ArrayLike) -> float:
+@partial(jax.jit, static_argnums=2)
+def simpson(y: JT.ArrayLike, x: JT.ArrayLike, axis: int = -1) -> jax.Array | float:
     """
     Integrate y(x) using values `y` evaluated at the locations `x`
 
@@ -67,27 +75,34 @@ def simpson(y: JT.ArrayLike, x: JT.ArrayLike) -> float:
     """
     y = jnp.array(y)
     x = jnp.array(x)
-    N = len(y)
+    nd = len(y.shape)
+    N = y.shape[axis]
 
     if N % 2 == 0:  # Even number of points, odd intervals
-        result = 0.0
+        slice_all = (slice(None),) * nd
 
         if N == 2:
             # need at least 3 points in integration axis to form parabolic segment
-            last_dx = x[-1] - x[-2]
-            result += 0.5 * last_dx * (y[-1] + y[-2])
+            slice1 = tupleset(slice_all, axis, -1)
+            slice2 = tupleset(slice_all, axis, -2)
+            last_dx = x[slice1] - x[slice2]
+            result = 0.5 * last_dx * (y[slice1] + y[slice2])
 
         else:
             # use Simpson's rule on first intervals
-            result = _basic_simpson(y, N - 3, x)
+            result = _basic_simpson(y, N - 3, x, axis=axis)
+
+            slice1 = tupleset(slice_all, axis, -1)
+            slice2 = tupleset(slice_all, axis, -2)
+            slice3 = tupleset(slice_all, axis, -3)
 
             # grab the last two spacings from the appropriate axis
-            hm2 = slice(-2, -1, 1)
-            hm1 = slice(-1, None, 1)
+            hm2 = tupleset(slice_all, axis, slice(-2, -1, 1))
+            hm1 = tupleset(slice_all, axis, slice(-1, None, 1))
 
-            diffs = jnp.diff(x)
-            h0 = jnp.squeeze(diffs[hm2])
-            h1 = jnp.squeeze(diffs[hm1])
+            diffs = jnp.float64(jnp.diff(x, axis=axis))
+            h0 = jnp.squeeze(diffs[hm2], axis=axis)
+            h1 = jnp.squeeze(diffs[hm1], axis=axis)
 
             # This is the correction for the last interval according to
             # Cartwright.
@@ -111,28 +126,30 @@ def simpson(y: JT.ArrayLike, x: JT.ArrayLike) -> float:
             den = 6 * h0 * (h0 + h1)
             eta = jnp.where(den != 0, num / den, 0.0)
 
-            result += alpha * y[-1] + beta * y[-2] - eta * y[-3]
+            result += alpha * y[slice1] + beta * y[slice2] - eta * y[slice3]
 
     else:
-        result = _basic_simpson(y, N - 2, x)
+        result = _basic_simpson(y, N - 2, x, axis=axis)
 
     return result
 
 
-@partial(jax.jit, static_argnums=1)
-def _basic_ln_simpson(ln_y, stop, x):
+@partial(jax.jit, static_argnums=(1, 3))
+def _basic_ln_simpson(ln_y: jax.Array, stop: int, x: jax.Array, axis: int) -> jax.Array:
     """
     Note: Interface comes from scipy.integrate.simpson implementation
     """
+    nd = len(ln_y.shape)  # number of dimensions
     step = 2
 
-    slice0 = slice(0, stop, step)
-    slice1 = slice(1, stop + 1, step)
-    slice2 = slice(2, stop + 2, step)
+    slice_all = (slice(None),) * nd
+    slice0 = tupleset(slice_all, axis, slice(0, stop, step))
+    slice1 = tupleset(slice_all, axis, slice(1, stop + 1, step))
+    slice2 = tupleset(slice_all, axis, slice(2, stop + 2, step))
 
     # Account for possibly different spacings.
     #    Simpson's rule changes a bit.
-    h = jnp.diff(x)
+    h = jnp.diff(x, axis=axis)
     h0 = h[slice0]
     h1 = h[slice1]
     hsum = h0 + h1
@@ -151,13 +168,13 @@ def _basic_ln_simpson(ln_y, stop, x):
         axis=0,
     )
     tmp = jnp.log(hsum / 6.0) + term
-    result = logsumexp(tmp)
-
-    return result
+    return logsumexp(tmp, axis=axis)
 
 
-@jax.jit
-def ln_simpson(ln_y, x) -> float:
+@partial(jax.jit, static_argnums=2)
+def ln_simpson(
+    ln_y: JT.ArrayLike, x: JT.ArrayLike, axis: int = -1
+) -> jax.Array | float:
     """
     Integrate y(x) using log values of the function `ln_y` evaluated at the locations
     `x`, and return the log of the integral
@@ -184,26 +201,34 @@ def ln_simpson(ln_y, x) -> float:
     """
     ln_y = jnp.array(ln_y)
     x = jnp.array(x)
-    N = len(ln_y)
+    nd = len(ln_y.shape)
+    N = ln_y.shape[axis]
 
     if N % 2 == 0:  # Even number of points, odd intervals
+        slice_all = (slice(None),) * nd
 
         if N == 2:
             # need at least 3 points in integration axis to form parabolic segment
-            last_dx = x[-1] - x[-2]
-            result = jnp.log(0.5 * last_dx) + jnp.logaddexp(ln_y[-1], ln_y[-2])
+            slice1 = tupleset(slice_all, axis, -1)
+            slice2 = tupleset(slice_all, axis, -2)
+            last_dx = x[slice1] - x[slice2]
+            result = jnp.log(0.5 * last_dx) + jnp.logaddexp(ln_y[slice1], ln_y[slice2])
 
         else:
             # use Simpson's rule on first intervals
-            result = _basic_ln_simpson(ln_y, N - 3, x)
+            result = _basic_ln_simpson(ln_y, N - 3, x, axis=axis)
+
+            slice1 = tupleset(slice_all, axis, -1)
+            slice2 = tupleset(slice_all, axis, -2)
+            slice3 = tupleset(slice_all, axis, -3)
 
             # grab the last two spacings from the appropriate axis
-            hm2 = slice(-2, -1, 1)
-            hm1 = slice(-1, None, 1)
+            hm2 = tupleset(slice_all, axis, slice(-2, -1, 1))
+            hm1 = tupleset(slice_all, axis, slice(-1, None, 1))
 
-            diffs = jnp.diff(x)
-            h0 = jnp.squeeze(diffs[hm2])
-            h1 = jnp.squeeze(diffs[hm1])
+            diffs = jnp.float64(jnp.diff(x, axis=axis))
+            h0 = jnp.squeeze(diffs[hm2], axis=axis)
+            h1 = jnp.squeeze(diffs[hm1], axis=axis)
 
             # This is the correction for the last interval according to
             # Cartwright.
@@ -227,10 +252,14 @@ def ln_simpson(ln_y, x) -> float:
             den = 6 * h0 * (h0 + h1)
             eta = jnp.where(den != 0, num / den, 0.0)
 
-            term = logsumexp(ln_y[-3:], b=jnp.array([-eta, beta, alpha]), axis=0)
+            term = logsumexp(
+                jnp.array([ln_y[slice1], ln_y[slice2], ln_y[slice3]]),
+                b=jnp.array([alpha, beta, -eta]),
+                axis=0,
+            )
             result = jnp.logaddexp(result, term)
 
     else:
-        result = _basic_ln_simpson(ln_y, N - 2, x)
+        result = _basic_ln_simpson(ln_y, N - 2, x, axis=axis)
 
     return result
